@@ -1,6 +1,7 @@
 name: Receive UX session CSV
 
 on:
+  workflow_dispatch:
   repository_dispatch:
     types: [ux-session-submitted]
 
