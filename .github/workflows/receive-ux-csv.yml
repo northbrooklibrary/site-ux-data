@@ -2,6 +2,23 @@ name: Receive UX session CSV
 
 on:
   workflow_dispatch:
+    inputs:
+      filename:
+        description: 'CSV filename'
+        required: true
+        default: 'manual-test.csv'
+      folder:
+        description: 'Target folder'
+        required: true
+        default: 'data'
+      branch:
+        description: 'Target branch'
+        required: true
+        default: 'main'
+      csv_b64:
+        description: 'Base64-encoded CSV content'
+        required: true
+        default: ''
   repository_dispatch:
     types: [ux-session-submitted]
 
@@ -15,21 +32,27 @@ jobs:
       - name: Check out repo
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.client_payload.branch || 'main' }}
+          ref: ${{ github.event.inputs.branch || github.event.client_payload.branch || 'main' }}
 
-      - name: Write CSV to data folder
+      - name: Decode CSV payload
         run: |
-          mkdir -p "${{ github.event.client_payload.folder || 'data' }}"
-          printf '%s' '${{ github.event.client_payload.csv }}' > "${{ github.event.client_payload.folder || 'data' }}/${{ github.event.client_payload.filename }}"
+          mkdir -p "${{ github.event.inputs.folder || github.event.client_payload.folder || 'data' }}"
+          CSV_B64="${{ github.event.inputs.csv_b64 || github.event.client_payload.csv_b64 }}"
+          if [ -z "$CSV_B64" ]; then
+            echo "No CSV payload provided." >&2
+            exit 1
+          fi
+          echo "$CSV_B64" | base64 -d > "${{ github.event.inputs.folder || github.event.client_payload.folder || 'data' }}/${{ github.event.inputs.filename || github.event.client_payload.filename }}"
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "${{ github.event.client_payload.folder || 'data' }}/${{ github.event.client_payload.filename }}"
+          FILE="${{ github.event.inputs.folder || github.event.client_payload.folder || 'data' }}/${{ github.event.inputs.filename || github.event.client_payload.filename }}"
+          git add "$FILE"
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
-            git commit -m "Add UX session: ${{ github.event.client_payload.filename }}"
+            git commit -m "Add UX session: ${{ github.event.inputs.filename || github.event.client_payload.filename }}"
             git push
           fi
